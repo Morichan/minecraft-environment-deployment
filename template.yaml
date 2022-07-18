@@ -119,6 +119,7 @@ Resources:
       RequiresCompatibilities:
       - FARGATE
       NetworkMode: awsvpc
+      TaskRoleArn: !Ref MinecraftECSTaskRole
       ExecutionRoleArn: !Ref MinecraftECSTaskExecRole
       ContainerDefinitions:
       - Name: minecraft-server
@@ -148,6 +149,7 @@ Resources:
       DesiredCount: 1
       DeploymentConfiguration:
         MinimumHealthyPercent: 0
+      EnableExecuteCommand: true
       LoadBalancers:
       - ContainerName: minecraft-server
         ContainerPort: 25565
@@ -186,6 +188,24 @@ Resources:
           - sts:AssumeRole
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+      - Key: !Ref ResourceTagKey
+        Value: !Ref AWS::StackName
+  MinecraftECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: minecraft-server-task-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ecs-tasks.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName

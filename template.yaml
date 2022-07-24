@@ -110,6 +110,7 @@ Resources:
       ClusterName: minecraft
   MinecraftECSTask:
     Type: AWS::ECS::TaskDefinition
+    DependsOn: MinecraftBucket
     Properties:
       Family: minecraft
       Cpu: 1024
@@ -127,6 +128,7 @@ Resources:
         MemoryReservation: 1024
         PortMappings:
         - ContainerPort: 25565
+        StopTimeout: 120
         Essential: true
         LogConfiguration:
           LogDriver: awslogs
@@ -172,6 +174,12 @@ Resources:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
 
+  # S3
+  MinecraftBucket:
+   Type: AWS::S3::Bucket
+   Properties:
+    BucketName: !Ref AWS::StackName
+
   # IAM
   MinecraftECSTaskExecRole:
     Type: AWS::IAM::Role
@@ -205,6 +213,7 @@ Resources:
           Action:
           - sts:AssumeRole
       ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
       - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
       - Key: !Ref ResourceTagKey

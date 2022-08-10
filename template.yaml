@@ -197,6 +197,19 @@ Resources:
    Properties:
     BucketName: !Ref AWS::StackName
 
+  # Lambda
+  MinecraftSwitcher:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: minecraft-switcher
+      CodeUri: src/
+      Handler: app.handler
+      Runtime: python3.9
+      Architectures:
+      - arm64
+      FunctionUrlConfig:
+        AuthType: NONE
+
   # IAM
   MinecraftECSTaskExecRole:
     Type: AWS::IAM::Role
@@ -235,3 +248,8 @@ Resources:
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
+
+Outputs:
+  MinecraftSwitcherURL:
+    Description: MinecraftSwitcher Lambda function endpoint URL
+    Value: !GetAtt MinecraftSwitcherUrl.FunctionUrl

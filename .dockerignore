@@ -3,3 +3,7 @@
 .venv
 .aws-sam
 samconfig.toml
+.coverage
+src
+tests
+requirements-dev.txt

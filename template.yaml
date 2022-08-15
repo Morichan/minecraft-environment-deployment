@@ -204,9 +204,9 @@ Resources:
 
   # S3
   MinecraftBucket:
-   Type: AWS::S3::Bucket
-   Properties:
-    BucketName: !Ref AWS::StackName
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AWS::StackName
 
   # Lambda
   MinecraftSwitcher:

@@ -227,12 +227,8 @@ Resources:
           CHANGED_TASK_COUNT_PARAMETER: 'DesiredECSTaskCount'
       Policies:
       - ElasticLoadBalancingReadOnly
+      - CloudFormationDescribeStacksPolicy: !Ref AWS::NoValue
       - Statement:
-        - Sid: CloudFormationDescribeStacks
-          Effect: Allow
-          Action:
-          - cloudformation:DescribeStacks
-          Resource: '*'
         - Sid: CloudFormationUpdateStack
           Effect: Allow
           Action:

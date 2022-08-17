@@ -345,6 +345,155 @@ Resources:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
 
+  # CloudWatch Metrics for connected some clients count
+  MinecraftECSJoinedCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: ' joined the game'
+      LogGroupName: !Ref MinecraftECSLogGroup
+      MetricTransformations:
+      - MetricNamespace: MinecraftECSTask
+        MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-joined-count
+        MetricValue: '1'
+  MinecraftECSLeftCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: ' left the game'
+      LogGroupName: !Ref MinecraftECSLogGroup
+      MetricTransformations:
+      - MetricNamespace: MinecraftECSTask
+        MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-left-count
+        MetricValue: '1'
+  MinecraftECSJoinedSomeClientsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-joined-some-clients
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: 1
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: notBreaching
+      Metrics:
+      - Id: result
+        Label: minecraft_joined_count_or_zero
+        Expression: FILL(m1, 0)
+        ReturnData: true
+      - Id: m1
+        Label: minecraft_joined_count
+        MetricStat:
+          Metric:
+            Namespace: MinecraftECSTask
+            MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-joined-count
+          Period: 60
+          Stat: Sum
+        ReturnData: false
+      AlarmActions:
+      - !Ref MinecraftECSConnectedSomeClientsSNSTopic
+  MinecraftECSLeftSomeClientsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-left-some-clients
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: 1
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      TreatMissingData: notBreaching
+      Metrics:
+      - Id: result
+        Label: minecraft_left_count_or_zero
+        Expression: FILL(m2, 0)
+        ReturnData: true
+      - Id: m2
+        Label: minecraft_left_count
+        MetricStat:
+          Metric:
+            Namespace: MinecraftECSTask
+            MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-left-count
+          Period: 60
+          Stat: Sum
+        ReturnData: false
+      AlarmActions:
+      - !Ref MinecraftECSConnectedSomeClientsSNSTopic
+  MinecraftECSConnectedSomeClientsSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+      - Key: !Ref ResourceTagKey
+        Value: !Ref AWS::StackName
+  MinecraftECSConnectedSomeClientsCounter:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-minecraft-ecs-connected-counter
+      CodeUri: src/clients_counter
+      Handler: app.handler
+      Runtime: python3.9
+      Architectures:
+      - arm64
+      Environment:
+        Variables:
+          JOINED_ALARM_NAME: !Ref MinecraftECSJoinedSomeClientsAlarm
+          LEFT_ALARM_NAME: !Ref MinecraftECSLeftSomeClientsAlarm
+          METRIC_NAMESPACE: MinecraftECSTask
+          METRIC_NAME: !Sub /aws/lambda/${AWS::StackName}-minecraft-ecs-connected-counter/minecraft-connected-count
+      Events:
+        SnsAlarmTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref MinecraftECSConnectedSomeClientsSNSTopic
+      Policies:
+      - CloudWatchReadOnlyAccess
+  MinecraftECSConnectedSomeClientsCounterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MinecraftECSConnectedSomeClientsCounter}
+      RetentionInDays: 14
+      Tags:
+      - Key: !Ref ResourceTagKey
+        Value: !Ref AWS::StackName
+  MinecraftECSConnectedCountMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.connected_count >= 0 }'
+      LogGroupName: !Ref MinecraftECSConnectedSomeClientsCounterLogGroup
+      MetricTransformations:
+      - MetricNamespace: MinecraftECSTask
+        MetricName: !Sub ${MinecraftECSConnectedSomeClientsCounterLogGroup}/minecraft-connected-count
+        MetricValue: $.connected_count
+  MinecraftECSConnectedSomeClientsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-connected-some-clients
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: 1
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 30
+      TreatMissingData: notBreaching
+      Metrics:
+      - Id: result
+        Label: minecraft_connected_count_repeared
+        Expression: FILL(m1, REPEAT)
+        ReturnData: true
+      - Id: m1
+        Label: minecraft_connected_count
+        MetricStat:
+          Metric:
+            Namespace: MinecraftECSTask
+            MetricName: !Sub ${MinecraftECSConnectedSomeClientsCounterLogGroup}/minecraft-connected-count
+          Period: 60
+          Stat: Sum
+        ReturnData: false
+      OKActions:
+      - !Ref MinecraftServerSwitchOffSNSTopic
+  MinecraftServerSwitchOffSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Protocol: https
+        Endpoint: !Sub ${MinecraftSwitcherUrl.FunctionUrl}switch/off
+      Tags:
+      - Key: !Ref ResourceTagKey
+        Value: !Ref AWS::StackName
+
   # IAM
   MinecraftECSTaskExecRole:
     Type: AWS::IAM::Role

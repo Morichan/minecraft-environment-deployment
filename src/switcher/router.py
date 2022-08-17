@@ -35,6 +35,11 @@ def switch_off():
     return _switch('off', 0)
 
 
+@router.post('/switch/off', description='Used by Amazon SNS; it can only execute POST methods')
+def switch_off_by_amazon_sns():
+    return _switch('off', 0)
+
+
 def _switch(on_off, task_count):
     is_on = on_off == 'on'
     switcher = MinecraftSwitcher(stack_name)

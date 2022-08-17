@@ -335,6 +335,14 @@ Resources:
           - lambda:GetFunctionUrlConfig
           Resource:
           - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*
+  MinecraftSwitcherLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MinecraftSwitcher}
+      RetentionInDays: 14
+      Tags:
+      - Key: !Ref ResourceTagKey
+        Value: !Ref AWS::StackName
 
   # IAM
   MinecraftECSTaskExecRole:

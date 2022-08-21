@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-aws s3 sync s3://minecraft-environment-deployment/backup/latest/world/ world/
+aws s3 sync s3://${BUCKET_NAME}/backup/latest/world/ world/
 
 trap "./terminate_minecraft_server.sh" EXIT
 

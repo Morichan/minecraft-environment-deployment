@@ -9,6 +9,14 @@ Parameters:
     Type: String
     Description: Public domain to connect to Minecraft server (ECS container task)
     Default: 'null'
+  MinecraftSubDomain:
+    Type: String
+    Description: Public sub-domain to connect to Minecraft server (ECS container task)
+    Default: 'null'
+  MinecraftHostedZoneId:
+    Type: String
+    Description: Hosted zone ID for public domain to connect to Minecraft server
+    Default: 'null'
   MinecraftServerImage:
     Type: String
     Description: Container image's $REPOSITORY_URL/$IMAGE:$TAG for Minecraft server
@@ -41,6 +49,8 @@ Parameters:
 Conditions:
   IsCreatedNLB: !Equals [ !Ref IsCreatedNLB, 'true' ]
   IsSetCustomDomain: !Not [ !Equals [ !Ref MinecraftDomain, 'null' ] ]
+  IsSetCustomSubDomain: !Not [ !Equals [ !Ref MinecraftSubDomain, 'null' ] ]
+  IsReusedHostedZone: !Not [ !Equals [ !Ref MinecraftHostedZoneId, 'null' ] ]
 
 
 Resources:
@@ -146,12 +156,15 @@ Resources:
         Value: !Ref AWS::StackName
   MinecraftRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
-    Condition: IsSetCustomDomain
+    Condition: IsSetCustomSubDomain
     Properties:
-      HostedZoneId: !Ref MinecraftRoute53HostedZone
+      HostedZoneId: !If
+      - IsReusedHostedZone
+      - !Ref MinecraftHostedZoneId
+      - !Ref MinecraftRoute53HostedZone
       RecordSets:
       - Type: A
-        Name: !Sub minecraft.${MinecraftDomain}.
+        Name: !Sub ${MinecraftSubDomain}.
         AliasTarget: !If
         - IsCreatedNLB
         - HostedZoneId: !GetAtt MinecraftVPCPublicSubnetNLB.CanonicalHostedZoneID
@@ -163,7 +176,7 @@ Resources:
   MinecraftECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: minecraft
+      ClusterName: !Sub ${AWS::StackName}-minecraft
   MinecraftECSTask:
     Type: AWS::ECS::TaskDefinition
     DependsOn: MinecraftBucket
@@ -186,6 +199,9 @@ Resources:
         - ContainerPort: 25565
         StopTimeout: 120
         Essential: true
+        Environment:
+        - Name: BUCKET_NAME
+          Value: !Ref AWS::StackName
         LogConfiguration:
           LogDriver: awslogs
           Options:
@@ -232,7 +248,7 @@ Resources:
   MinecraftECSLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /ecs/logs/minecraft-server
+      LogGroupName: !Sub /ecs/logs/${AWS::StackName}/minecraft-server
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
@@ -247,15 +263,15 @@ Resources:
   ## 用意しているダミーS3バケット
   HoldedDomainSettingsBucket:
     Type: AWS::S3::Bucket
-    Condition: IsSetCustomDomain
+    Condition: IsSetCustomSubDomain
     Properties:
-      BucketName: !Sub minecraft.${MinecraftDomain}
+      BucketName: !Ref MinecraftSubDomain
 
   # Lambda
   MinecraftSwitcher:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: minecraft-switcher
+      FunctionName: !Sub ${AWS::StackName}-minecraft-switcher
       CodeUri: src/
       Handler: app.handler
       Runtime: python3.9
@@ -324,7 +340,7 @@ Resources:
   MinecraftECSTaskExecRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: minecraft-server-task-execution-role
+      RoleName: !Sub ${AWS::StackName}-minecraft-server-task-execution-role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -342,7 +358,7 @@ Resources:
   MinecraftECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: minecraft-server-task-role
+      RoleName: !Sub ${AWS::StackName}-minecraft-server-task-role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:

@@ -7,7 +7,7 @@ kill ${MINECRAFT_PID}
 wait ${MINECRAFT_PID}
 echo "Done minecraft-server."
 
-aws s3 sync world/ s3://minecraft-environment-deployment/backup/latest/world/
+aws s3 sync world/ s3://${BUCKET_NAME}/backup/latest/world/
 
 # Wait to push log to CloudWatch Logs
 sleep 10

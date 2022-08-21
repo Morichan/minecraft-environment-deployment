@@ -249,6 +249,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /ecs/logs/${AWS::StackName}/minecraft-server
+      RetentionInDays: 14
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName

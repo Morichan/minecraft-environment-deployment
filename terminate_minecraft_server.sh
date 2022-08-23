@@ -8,6 +8,7 @@ wait ${MINECRAFT_PID}
 echo "Done minecraft-server."
 
 aws s3 sync world/ s3://${BUCKET_NAME}/backup/latest/world/
+aws s3 sync crash-reports/ s3://${BUCKET_NAME}/backup/latest/crash-reports/
 
 # Wait to push log to CloudWatch Logs
 sleep 10

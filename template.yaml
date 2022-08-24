@@ -349,7 +349,7 @@ Resources:
   MinecraftECSTaskExecRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-minecraft-server-task-execution-role
+      RoleName: !Sub ${AWS::StackName}-minecraft-server-task-exec-role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:

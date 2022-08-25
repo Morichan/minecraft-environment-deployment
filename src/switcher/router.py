@@ -31,7 +31,7 @@ def switch_on():
 
 
 @router.get('/switch/off')
-def switch_on():
+def switch_off():
     return _switch('off', 0)
 
 

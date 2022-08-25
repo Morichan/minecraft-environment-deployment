@@ -36,7 +36,7 @@ def switch_on():
 
 
 def _switch(on_off, task_count):
-    is_on = True if on_off == 'on' else False
+    is_on = on_off == 'on'
     switcher = MinecraftSwitcher(stack_name)
 
     try:

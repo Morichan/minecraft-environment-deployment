@@ -273,7 +273,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${AWS::StackName}-minecraft-switcher
-      CodeUri: src/
+      CodeUri: src/switcher/
       Handler: app.handler
       Runtime: python3.9
       Architectures:

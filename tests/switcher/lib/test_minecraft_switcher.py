@@ -5,7 +5,7 @@ import pytest
 from moto import mock_cloudformation, mock_s3
 
 with mock_cloudformation():
-    from src.lib.minecraft_switcher import (
+    from lib.minecraft_switcher import (
         MinecraftSwitcher,
         UnnecessaryToUpdateStackError,
         NotFoundStackError,

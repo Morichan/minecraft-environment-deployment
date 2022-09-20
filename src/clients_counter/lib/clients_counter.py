@@ -13,7 +13,7 @@ logger.setLevel(INFO)
 cw = boto3.client('cloudwatch')
 
 
-class ClientsCounter:
+class ClientsCounterByCloudWatch:
     def __init__(self, joined_alarm_name, left_alarm_name, metric_namespace, metric_name):
         self.joined_alarm_name = joined_alarm_name
         self.left_alarm_name = left_alarm_name

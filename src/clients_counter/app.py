@@ -2,7 +2,7 @@ import json
 from logging import getLogger, INFO
 import os
 
-from lib.clients_counter import ClientsCounter
+from lib.clients_counter import ClientsCounterByCloudWatch
 
 
 logger = getLogger(__name__)
@@ -15,7 +15,7 @@ metric_name = os.getenv('METRIC_NAME')
 
 
 def handler(event, context):
-    clients_counter = ClientsCounter(
+    clients_counter = ClientsCounterByCloudWatch(
         joined_alarm_name,
         left_alarm_name,
         metric_namespace,

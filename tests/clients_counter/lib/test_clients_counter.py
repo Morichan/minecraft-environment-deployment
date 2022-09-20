@@ -7,12 +7,12 @@ from moto import mock_cloudwatch
 
 with mock_cloudwatch():
     from lib.clients_counter import (
-        ClientsCounter,
+        ClientsCounterByCloudWatch,
     )
 
 
 @mock_cloudwatch
-class TestClientsCounter:
+class TestClientsCounterByCloudWatch:
     cw = boto3.client('cloudwatch')
 
     def _set_to_repeat_fill_metric_data(self, namespace, metric_name, start_timestamp, end_timestamp, values):
@@ -32,7 +32,7 @@ class TestClientsCounter:
         ...     {'timestamp': end_1_timestamp,   'value': 0},
         ... ]
 
-        >>> t = TestClientsCounter()
+        >>> t = TestClientsCounterByCloudWatch()
         >>> t._set_to_repeat_fill_metric_data('test_namespace', 'test_metric_name', start_timestamp, end_timestamp, values)
 
         >>> data = t._get_metric_data('test_namespace', 'test_metric_name', start_timestamp, end_timestamp)
@@ -96,11 +96,11 @@ class TestClientsCounter:
 
     def _mock_to_get_metric_data(self, mocker, namespace, metric_name, start_time, end_time):
         """
-        lib.clients_counter.ClientsCounter.get_metric_data メソッドをモック化する
+        lib.clients_counter.ClientsCounterByCloudWatch.get_metric_data メソッドをモック化する
 
         Notes
         -----
-        moto ライブラリでは、 lib.clients_counter.ClientsCounter.get_metric_data メソッド内で呼出している
+        moto ライブラリでは、 lib.clients_counter.ClientsCounterByCloudWatch.get_metric_data メソッド内で呼出している
         boto3.client('cloudwatch').get_metric_data メソッドにおける Expression に対応しておらず、
         モック化しない状態ではテストが通らない。
         そこで、 self._get_metric_data メソッドで Expression を無効化したメソッドを定義しておく。
@@ -108,7 +108,7 @@ class TestClientsCounter:
 
         また、実行時間から相対的にデータを取得するため、その部分に対してもモック化が必要となる。
         """
-        mocker.patch('lib.clients_counter.ClientsCounter.get_metric_data', side_effect=lambda: self._get_metric_data(namespace, metric_name, start_time, end_time))
+        mocker.patch('lib.clients_counter.ClientsCounterByCloudWatch.get_metric_data', side_effect=lambda: self._get_metric_data(namespace, metric_name, start_time, end_time))
 
     def _create_cloudwatch_alarm_message(self, alarm_name, timestamp, value, namespace='test_namespace', metric_name='test_metric_name'):
         return json.dumps({
@@ -146,7 +146,7 @@ class TestClientsCounter:
     def test_get_all_zero_metric_data_without_one_timestamp(self, mocker):
         self._mock_to_get_metric_data(mocker, 'test_namespace', 'test_metric_name', datetime(2022, 8, 1, 15), datetime(2022, 8, 1, 16))
         self._set_to_repeat_fill_metric_data('test_namespace', 'test_metric_name', datetime(2022, 8, 1, 15), datetime(2022, 8, 1, 16), [{'timestamp': datetime(2022, 8, 1, 15, 30), 'value': 1}, {'timestamp': datetime(2022, 8, 1, 15, 31), 'value': 0}])
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_metric_data()
         actual_values = actual['MetricDataResults'][0]['Values']
@@ -161,7 +161,7 @@ class TestClientsCounter:
         self._set_to_repeat_fill_metric_data('test_namespace', 'test_metric_name', datetime(2022, 8, 1, 15), datetime(2022, 8, 1, 16), [
             {'timestamp': datetime(2022, 8, 1, 15, 30), 'value': 1},
         ])
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_previous_metric()
 
@@ -175,7 +175,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 34), 'value': 1},
             {'timestamp': datetime(2022, 8, 1, 15, 59), 'value': 3},
         ])
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_previous_metric()
 
@@ -187,7 +187,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 30), 'value': 1},
             {'timestamp': datetime(2022, 8, 1, 15, 31), 'value': 0},
         ])
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_previous_metric()
 
@@ -201,7 +201,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 40), 'value': 4},
             {'timestamp': datetime(2022, 8, 1, 15, 41), 'value': 2},
         ])
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_previous_metric()
 
@@ -210,7 +210,7 @@ class TestClientsCounter:
     def test_get_previous_metric_when_metric_has_not_been_to_count_up_or_down(self, mocker):
         self._mock_to_get_metric_data(mocker, 'test_namespace', 'test_metric_name', datetime(2022, 8, 1, 15), datetime(2022, 8, 1, 16))
         self._set_to_repeat_fill_metric_data('test_namespace', 'test_metric_name', datetime(2022, 8, 1, 15), datetime(2022, 8, 1, 16), [])
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_previous_metric()
 
@@ -218,7 +218,7 @@ class TestClientsCounter:
 
     def test_get_previous_metric_when_metric_is_not_created(self, mocker):
         self._mock_to_get_metric_data(mocker, 'test_namespace', 'test_metric_name', datetime(2022, 8, 1, 15), datetime(2022, 8, 1, 16))
-        obj = ClientsCounter(None, None, 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch(None, None, 'test_namespace', 'test_metric_name')
 
         actual = obj.get_previous_metric()
 
@@ -226,7 +226,7 @@ class TestClientsCounter:
 
     def test_extract_datapoint_when_current_metric_datapoint_is_one(self):
         notification_log_from_sns = 'Threshold Crossed: 1 out of the last 1 datapoints [1.0 (13/08/22 16:10:00)] was greater than or equal to the threshold (1.0) (minimum 1 datapoint for OK -> ALARM transition).'
-        obj = ClientsCounter(None, None, None, None)
+        obj = ClientsCounterByCloudWatch(None, None, None, None)
 
         actual = obj.extract_datapoint(notification_log_from_sns)
 
@@ -234,7 +234,7 @@ class TestClientsCounter:
 
     def test_extract_datapoint_when_current_metric_datapoint_is_zero(self):
         notification_log_from_sns = 'Threshold Crossed: 1 out of the last 1 datapoints [0.0 (01/08/22 15:10:00)] was not greater than or equal to the threshold (1.0) (minimum 1 datapoint for ALARM -> OK transition).'
-        obj = ClientsCounter(None, None, None, None)
+        obj = ClientsCounterByCloudWatch(None, None, None, None)
 
         actual = obj.extract_datapoint(notification_log_from_sns)
 
@@ -244,7 +244,7 @@ class TestClientsCounter:
         self._mock_to_get_metric_data(mocker, 'test_namespace', 'test_metric_name', datetime(2022, 8, 1, 14, 31), datetime(2022, 8, 1, 15, 31))
         self._set_to_repeat_fill_metric_data('test_namespace', 'test_metric_name', datetime(2022, 8, 1, 14), datetime(2022, 8, 1, 16), [])
         message = self._create_cloudwatch_alarm_message('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
-        obj = ClientsCounter('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
 
         actual = obj.create_log_data(message)
 
@@ -256,7 +256,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 30), 'value': 1},
         ])
         message = self._create_cloudwatch_alarm_message('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
-        obj = ClientsCounter('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
 
         actual = obj.create_log_data(message)
 
@@ -270,7 +270,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 26), 'value': 3},
         ])
         message = self._create_cloudwatch_alarm_message('joined_alarm', datetime(2022, 8, 1, 15, 31), 2.0)
-        obj = ClientsCounter('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
 
         actual = obj.create_log_data(message)
 
@@ -282,7 +282,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 30), 'value': 1},
         ])
         message = self._create_cloudwatch_alarm_message('left_alarm', datetime(2022, 8, 1, 15, 59), 1.0)
-        obj = ClientsCounter('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
 
         actual = obj.create_log_data(message)
 
@@ -295,7 +295,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 31), 'value': 4},
         ])
         message = self._create_cloudwatch_alarm_message('left_alarm', datetime(2022, 8, 1, 15, 59), 2.0)
-        obj = ClientsCounter('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
 
         actual = obj.create_log_data(message)
 
@@ -309,7 +309,7 @@ class TestClientsCounter:
             {'timestamp': datetime(2022, 8, 1, 15, 26), 'value': 3},
         ])
         message = self._create_cloudwatch_alarm_message('left_alarm', datetime(2022, 8, 1, 15, 59), 3.0)
-        obj = ClientsCounter('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('joined_alarm', 'left_alarm', 'test_namespace', 'test_metric_name')
 
         actual = obj.create_log_data(message)
 
@@ -319,7 +319,7 @@ class TestClientsCounter:
         self._mock_to_get_metric_data(mocker, 'test_namespace', 'test_metric_name', datetime(2022, 8, 1, 14, 31), datetime(2022, 8, 1, 15, 31))
         self._set_to_repeat_fill_metric_data('test_namespace', 'test_metric_name', datetime(2022, 8, 1, 14), datetime(2022, 8, 1, 16), [])
         message = self._create_cloudwatch_alarm_message('unknown_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
-        obj = ClientsCounter('not_found_alarm', 'not_exist_alarm', 'test_namespace', 'test_metric_name')
+        obj = ClientsCounterByCloudWatch('not_found_alarm', 'not_exist_alarm', 'test_namespace', 'test_metric_name')
 
         with pytest.raises(RuntimeError):
             obj.create_log_data(message)

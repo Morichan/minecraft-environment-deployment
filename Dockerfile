@@ -4,7 +4,7 @@ FROM public.ecr.aws/amazonlinux/amazonlinux:2.0.20220606.1-arm64v8
 WORKDIR /root
 
 # Install tools
-RUN yum install -y procps unzip
+RUN yum install -y procps unzip jq
 
 # Install AWS-CLI
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"

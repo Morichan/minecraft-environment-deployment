@@ -185,6 +185,9 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub ${AWS::StackName}-minecraft
+      ClusterSettings:
+      - Name: containerInsights
+        Value: enabled
   MinecraftECSTask:
     Type: AWS::ECS::TaskDefinition
     DependsOn: MinecraftBucket

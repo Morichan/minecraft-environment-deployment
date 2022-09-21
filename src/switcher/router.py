@@ -1,6 +1,7 @@
 from logging import getLogger, INFO
 import os
 
+from botocore.exceptions import ClientError
 from fastapi import APIRouter
 
 from lib.minecraft_switcher import (
@@ -50,6 +51,9 @@ def _switch(on_off, task_count):
             changed_task_count_parameter: str(task_count),
         }, ['CAPABILITY_NAMED_IAM'])
         return {'message': f'Try to switch {on_off}, so please wait.'}
+    except ClientError:
+        logger.exception(f'Failed to update stack for switch {on_off}.')
+        return {'message': f'Failed to update stack for switch {on_off} ({stack_name=}).'}
     except UnnecessaryToUpdateStackError:
         return {'message': f'Stack is unnecessary to switch {on_off} ({stack_name=}).'}
     except NotFoundStackError:

@@ -298,6 +298,7 @@ Resources:
           STACK_NAME: !Ref AWS::StackName
           SWITCHED_PARAMETER: 'IsCreatedNLB'
           CHANGED_TASK_COUNT_PARAMETER: 'DesiredECSTaskCount'
+          TABLE_NAME: !Ref MinecraftConnectedCounterTable
       Events:
         SnsSwitchOffTopic:
           Type: SNS
@@ -311,6 +312,8 @@ Resources:
           HostedZoneId: '*'
       - SNSCrudPolicy:
           TopicName: '*'
+      - DynamoDBReadPolicy:
+          TableName: !Ref MinecraftConnectedCounterTable
       - Statement:
         - Sid: CloudFormationUpdateStack
           Effect: Allow

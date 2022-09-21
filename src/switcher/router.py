@@ -8,6 +8,7 @@ from lib.minecraft_switcher import (
     MinecraftSwitcher,
     UnnecessaryToUpdateStackError,
     NotFoundStackError,
+    UserStillConnectedError,
 )
 
 
@@ -17,6 +18,8 @@ logger.setLevel(INFO)
 stack_name = os.getenv('STACK_NAME')
 switched_parameter = os.getenv('SWITCHED_PARAMETER')
 changed_task_count_parameter = os.getenv('CHANGED_TASK_COUNT_PARAMETER')
+table_name = os.getenv('TABLE_NAME')
+primary_key_column_name = os.getenv('PRIMARY_KEY_COLUMN_NAME', 'id')
 
 router = APIRouter()
 
@@ -38,7 +41,7 @@ def switch_off():
 
 def _switch(on_off, task_count):
     is_on = on_off == 'on'
-    switcher = MinecraftSwitcher(stack_name)
+    switcher = MinecraftSwitcher(stack_name, table_name, primary_key_column_name)
 
     try:
         switcher.update_cloudformation_stack({
@@ -53,3 +56,5 @@ def _switch(on_off, task_count):
         return {'message': f'Stack is unnecessary to switch {on_off} ({stack_name=}).'}
     except NotFoundStackError:
         return {'message': f'Stack is not found ({stack_name=}).'}
+    except UserStillConnectedError:
+        return {'message': f'Stack cannot switch {on_off} because user still connected ({stack_name=}).'}

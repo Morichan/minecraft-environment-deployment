@@ -2,18 +2,26 @@ import boto3
 import json
 
 import pytest
-from moto import mock_cloudformation, mock_s3
+from moto import (
+    mock_cloudformation,
+    mock_dynamodb,
+    mock_s3,
+)
 
-with mock_cloudformation():
+with mock_cloudformation(), mock_dynamodb():
     from lib.minecraft_switcher import (
         MinecraftSwitcher,
         UnnecessaryToUpdateStackError,
         NotFoundStackError,
+        UserStillConnectedError,
     )
 
 
 @mock_cloudformation
+@mock_dynamodb
 class TestMinecraftSwitcher:
+    dynamodb = boto3.client('dynamodb')
+
     def _create_cfn_parameters(self, parameters, is_reused=None):
         return [({
             'ParameterKey': k,
@@ -46,23 +54,31 @@ class TestMinecraftSwitcher:
                 Parameters=self._create_cfn_parameters(parameters)
             )
 
+    def _create_table(self, table_name, primary_key):
+        self.dynamodb.create_table(
+            TableName=table_name,
+            AttributeDefinitions=[{'AttributeName': primary_key, 'AttributeType': 'S'}],
+            KeySchema=[{'AttributeName': primary_key, 'KeyType': 'HASH'}],
+            BillingMode='PAY_PER_REQUEST'
+        )
+
     def test_not_set_param_if_stack_name_is_null(self):
         with pytest.raises(RuntimeError):
-            MinecraftSwitcher(None)
+            MinecraftSwitcher(None, None, None)
 
     def test_not_set_param_if_stack_name_is_empty(self):
         with pytest.raises(RuntimeError):
-            MinecraftSwitcher('')
+            MinecraftSwitcher('', None, None)
 
     def test_not_set_param_if_stack_name_is_not_string(self):
         with pytest.raises(RuntimeError):
-            MinecraftSwitcher(['not', 'string', 'info'])
+            MinecraftSwitcher(['not', 'string', 'info'], None, None)
 
     def test_get_cloudformation_one_parameter(self):
         stack_name = 'SampleStack'
         stack_params = {'SampleKey': 'SampleValue'}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(stack_params)
 
         actual = obj.get_cloudformation_parameters()
@@ -73,7 +89,7 @@ class TestMinecraftSwitcher:
         stack_name = 'SampleStack'
         stack_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(stack_params)
 
         actual = obj.get_cloudformation_parameters()
@@ -84,7 +100,7 @@ class TestMinecraftSwitcher:
         stack_name = 'SampleStack'
         stack_params = {}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(stack_params)
 
         actual = obj.get_cloudformation_parameters()
@@ -94,7 +110,7 @@ class TestMinecraftSwitcher:
     def test_not_get_cloudformation_if_try_to_search_different_stack_name(self):
         stack_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         self._create_cfn_stack('SampleStack', stack_params)
-        obj = MinecraftSwitcher('NotFoundStackName')
+        obj = MinecraftSwitcher('NotFoundStackName', None, None)
 
         actual = obj.get_cloudformation_parameters()
 
@@ -105,7 +121,7 @@ class TestMinecraftSwitcher:
         stack_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         overrode_params = {'SampleKey': 'Overrode', 'ExampleKey': 'Rewritten'}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(overrode_params)
 
         obj.update_cloudformation_stack(overrode_params)
@@ -119,7 +135,7 @@ class TestMinecraftSwitcher:
         overrode_params = {'SampleKey': 'Overrode'}
         ignore_overrode_params = {'ExampleKey': 'ExampleValue'}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(overrode_params | ignore_overrode_params)
 
         obj.update_cloudformation_stack(overrode_params)
@@ -132,7 +148,7 @@ class TestMinecraftSwitcher:
         stack_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         overrode_params = {}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(stack_params)
 
         with pytest.raises(UnnecessaryToUpdateStackError):
@@ -143,7 +159,7 @@ class TestMinecraftSwitcher:
         stack_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         overrode_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         self._create_cfn_stack(stack_name, stack_params)
-        obj = MinecraftSwitcher(stack_name)
+        obj = MinecraftSwitcher(stack_name, None, None)
         expected = self._create_cfn_parameters(overrode_params)
 
         with pytest.raises(UnnecessaryToUpdateStackError):
@@ -153,8 +169,35 @@ class TestMinecraftSwitcher:
         stack_params = {'SampleKey': 'SampleValue', 'ExampleKey': 'ExampleValue'}
         overrode_params = {}
         self._create_cfn_stack('SampleStack', stack_params)
-        obj = MinecraftSwitcher('NotFoundStackName')
+        obj = MinecraftSwitcher('NotFoundStackName', None, None)
         expected = self._create_cfn_parameters(stack_params)
 
         with pytest.raises(NotFoundStackError):
             obj.update_cloudformation_stack(overrode_params)
+
+    def test_not_update_cloudformation_if_there_is_connected_user(self):
+        self._create_table('TestTable', 'id')
+        self.dynamodb.put_item(
+            TableName='TestTable',
+            Item={'id': {'S': 'counter'}, 'count': {'N': '1'}}
+        )
+        self._create_cfn_stack('TestStack', {'TestKey': 'TestValue'})
+        obj = MinecraftSwitcher('TestStack', 'TestTable', 'id')
+
+        with pytest.raises(UserStillConnectedError):
+            obj.update_cloudformation_stack({'TestKey': 'Overrode'})
+
+    def test_update_cloudformation_if_there_is_not_connected_user(self):
+        self._create_table('TestTable', 'id')
+        self.dynamodb.put_item(
+            TableName='TestTable',
+            Item={'id': {'S': 'counter'}, 'count': {'N': '0'}}
+        )
+        self._create_cfn_stack('TestStack', {'TestKey': 'TestValue'})
+        obj = MinecraftSwitcher('TestStack', 'TestTable', 'id')
+        expected = self._create_cfn_parameters({'TestKey': 'Overrode'})
+
+        obj.update_cloudformation_stack({'TestKey': 'Overrode'})
+        actual = obj.get_cloudformation_parameters()
+
+        assert actual == expected

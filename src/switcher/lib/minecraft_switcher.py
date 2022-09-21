@@ -8,6 +8,7 @@ logger = getLogger(__name__)
 logger.setLevel(INFO)
 
 cfn = boto3.client('cloudformation')
+dynamodb = boto3.client('dynamodb')
 
 
 class MinecraftSwitcher:
@@ -23,18 +24,22 @@ class MinecraftSwitcher:
     >>> # Set properties
     >>> stack_name = 'SampleStack'
     >>> overrode_parameters = {'SampleKey': 'Overrode'}
+    >>> table_name = 'SampleTable'
+    >>> primary_key_column_name = 'id'
     >>> capabilities = []
 
     >>> # Generate object and update
-    >>> switcher = MinecraftSwitcher(stack_name)
+    >>> switcher = MinecraftSwitcher(stack_name, table_name, primary_key_column_name)
     >>> switcher.update_cloudformation_stack(overrode_parameters, capabilities)
 
     """
-    def __init__(self, stack_name):
+    def __init__(self, stack_name, table_name, primary_key_column_name):
         if not(type(stack_name) is str and len(stack_name)):
             raise
 
         self._stack_name = stack_name
+        self._table_name = table_name
+        self._primary_key_column_name = primary_key_column_name
 
     def get_cloudformation_parameters(self):
         """
@@ -80,7 +85,13 @@ class MinecraftSwitcher:
         UnnecessaryToUpdateStackError
             アップデート実行時における上書きパラメーターが、全て更新前の設定値と同じなどの理由により、UpdateStack処理を実行する必要が無い場合に投げる。
 
+        UserStillConnectedError
+            アップデート実行時、まだユーザーが接続している場合に投げる。
+
         """
+        if self._is_connected_any_users(self._table_name, self._primary_key_column_name):
+            raise UserStillConnectedError()
+
         params = self.get_cloudformation_parameters()
 
         if params is None:
@@ -111,10 +122,24 @@ class MinecraftSwitcher:
 
         return overrode
 
+    def _is_connected_any_users(self, table_name, primary_key_column_name):
+        if table_name is None:
+            return False
+
+        result = dynamodb.get_item(
+            TableName=self._table_name,
+            Key={primary_key_column_name: {'S': 'counter'}}
+        )
+        return int(result['Item']['count']['N']) > 0
+
 
 class NotFoundStackError(RuntimeError):
     pass
 
 
 class UnnecessaryToUpdateStackError(RuntimeError):
+    pass
+
+
+class UserStillConnectedError(RuntimeError):
     pass

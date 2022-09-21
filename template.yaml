@@ -298,12 +298,22 @@ Resources:
           STACK_NAME: !Ref AWS::StackName
           SWITCHED_PARAMETER: 'IsCreatedNLB'
           CHANGED_TASK_COUNT_PARAMETER: 'DesiredECSTaskCount'
+          TABLE_NAME: !Ref MinecraftConnectedCounterTable
+      Events:
+        SnsSwitchOffTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref MinecraftServerSwitchOffSNSTopic
       Policies:
       - ElasticLoadBalancingReadOnly
       - AmazonRoute53ReadOnlyAccess
       - CloudFormationDescribeStacksPolicy: !Ref AWS::NoValue
       - Route53ChangeResourceRecordSetsPolicy:
           HostedZoneId: '*'
+      - SNSCrudPolicy:
+          TopicName: '*'
+      - DynamoDBReadPolicy:
+          TableName: !Ref MinecraftConnectedCounterTable
       - Statement:
         - Sid: CloudFormationUpdateStack
           Effect: Allow
@@ -444,10 +454,9 @@ Resources:
       - arm64
       Environment:
         Variables:
+          TABLE_NAME: !Ref MinecraftConnectedCounterTable
           JOINED_ALARM_NAME: !Ref MinecraftECSJoinedSomeClientsAlarm
           LEFT_ALARM_NAME: !Ref MinecraftECSLeftSomeClientsAlarm
-          METRIC_NAMESPACE: MinecraftECSTask
-          METRIC_NAME: !Sub /aws/lambda/${AWS::StackName}-minecraft-ecs-connected-counter/minecraft-connected-count
       Events:
         SnsAlarmTopic:
           Type: SNS
@@ -455,6 +464,8 @@ Resources:
             Topic: !Ref MinecraftECSConnectedSomeClientsSNSTopic
       Policies:
       - CloudWatchReadOnlyAccess
+      - DynamoDBCrudPolicy:
+          TableName: !Ref MinecraftConnectedCounterTable
   MinecraftECSConnectedSomeClientsCounterLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -463,19 +474,25 @@ Resources:
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
+  MinecraftConnectedCounterTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      Tags:
+        # Key is not used Fn::Ref: ResourceTagKey
+        minecraft:cloudformation:stack-name: !Ref AWS::StackName
   MinecraftECSConnectedCountMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.connected_count >= 0 }'
+      FilterPattern: '{ $.connected_count = 0 }'
       LogGroupName: !Ref MinecraftECSConnectedSomeClientsCounterLogGroup
       MetricTransformations:
       - MetricNamespace: MinecraftECSTask
         MetricName: !Sub ${MinecraftECSConnectedSomeClientsCounterLogGroup}/minecraft-connected-count
-        MetricValue: $.connected_count
-  MinecraftECSConnectedSomeClientsAlarm:
+        MetricValue: 1
+  MinecraftECSConnectedAnyClientsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-connected-some-clients
+      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-connected-any-clients
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Threshold: 1
       DatapointsToAlarm: 1
@@ -484,7 +501,7 @@ Resources:
       Metrics:
       - Id: result
         Label: minecraft_connected_count_repeared
-        Expression: FILL(m1, REPEAT)
+        Expression: FILL(m1, 0)
         ReturnData: true
       - Id: m1
         Label: minecraft_connected_count
@@ -501,8 +518,8 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       Subscription:
-      - Protocol: https
-        Endpoint: !Sub ${MinecraftSwitcherUrl.FunctionUrl}switch/off
+      - Protocol: lambda
+        Endpoint: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-minecraft-switcher
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName

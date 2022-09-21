@@ -12,4 +12,17 @@ logger.setLevel(INFO)
 app = FastAPI()
 app.include_router(router)
 
-handler = Mangum(app)
+
+def handler(event, context):
+    if 'Records' in event:
+        logger.info(f'{event=}')
+        event = {
+            'httpMethod': 'GET',
+            'resource': '/',
+            'path': '/switch/off',
+            'body': None,
+            'multiValueQueryStringParameters': None,
+            'requestContext': {},
+        }
+
+    return Mangum(app)(event, context)

@@ -298,12 +298,19 @@ Resources:
           STACK_NAME: !Ref AWS::StackName
           SWITCHED_PARAMETER: 'IsCreatedNLB'
           CHANGED_TASK_COUNT_PARAMETER: 'DesiredECSTaskCount'
+      Events:
+        SnsSwitchOffTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref MinecraftServerSwitchOffSNSTopic
       Policies:
       - ElasticLoadBalancingReadOnly
       - AmazonRoute53ReadOnlyAccess
       - CloudFormationDescribeStacksPolicy: !Ref AWS::NoValue
       - Route53ChangeResourceRecordSetsPolicy:
           HostedZoneId: '*'
+      - SNSCrudPolicy:
+          TopicName: '*'
       - Statement:
         - Sid: CloudFormationUpdateStack
           Effect: Allow
@@ -508,8 +515,8 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       Subscription:
-      - Protocol: https
-        Endpoint: !Sub ${MinecraftSwitcherUrl.FunctionUrl}switch/off
+      - Protocol: lambda
+        Endpoint: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-minecraft-switcher
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName

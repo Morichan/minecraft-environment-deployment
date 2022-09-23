@@ -201,3 +201,14 @@ class TestMinecraftSwitcher:
         actual = obj.get_cloudformation_parameters()
 
         assert actual == expected
+
+    def test_update_cloudformation_if_there_is_not_data_from_table(self):
+        self._create_table('TestTable', 'id')
+        self._create_cfn_stack('TestStack', {'TestKey': 'TestValue'})
+        obj = MinecraftSwitcher('TestStack', 'TestTable', 'id')
+        expected = self._create_cfn_parameters({'TestKey': 'Overrode'})
+
+        obj.update_cloudformation_stack({'TestKey': 'Overrode'})
+        actual = obj.get_cloudformation_parameters()
+
+        assert actual == expected

@@ -130,6 +130,10 @@ class MinecraftSwitcher:
             TableName=self._table_name,
             Key={primary_key_column_name: {'S': 'counter'}}
         )
+
+        if not result.get('Item'):
+            return False
+
         return int(result['Item']['count']['N']) > 0
 
 

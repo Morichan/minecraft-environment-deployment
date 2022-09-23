@@ -131,10 +131,7 @@ class MinecraftSwitcher:
             Key={primary_key_column_name: {'S': 'counter'}}
         )
 
-        if not result.get('Item'):
-            return False
-
-        return int(result['Item']['count']['N']) > 0
+        return int(result.get('Item', {}).get('count', {}).get('N', '0')) > 0
 
 
 class NotFoundStackError(RuntimeError):

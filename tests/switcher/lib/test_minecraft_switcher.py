@@ -212,3 +212,48 @@ class TestMinecraftSwitcher:
         actual = obj.get_cloudformation_parameters()
 
         assert actual == expected
+
+    def test_update_cloudformation_if_there_is_not_connected_item(self):
+        self._create_table('TestTable', 'id')
+        self.dynamodb.put_item(
+            TableName='TestTable',
+            Item={'id': {'S': 'ignore_data'}}
+        )
+        self._create_cfn_stack('TestStack', {'TestKey': 'TestValue'})
+        obj = MinecraftSwitcher('TestStack', 'TestTable', 'id')
+        expected = self._create_cfn_parameters({'TestKey': 'Overrode'})
+
+        obj.update_cloudformation_stack({'TestKey': 'Overrode'})
+        actual = obj.get_cloudformation_parameters()
+
+        assert actual == expected
+
+    def test_update_cloudformation_if_there_is_not_connected_data(self):
+        self._create_table('TestTable', 'id')
+        self.dynamodb.put_item(
+            TableName='TestTable',
+            Item={'id': {'S': 'counter'}, 'not_count_data': {'N': '0'}}
+        )
+        self._create_cfn_stack('TestStack', {'TestKey': 'TestValue'})
+        obj = MinecraftSwitcher('TestStack', 'TestTable', 'id')
+        expected = self._create_cfn_parameters({'TestKey': 'Overrode'})
+
+        obj.update_cloudformation_stack({'TestKey': 'Overrode'})
+        actual = obj.get_cloudformation_parameters()
+
+        assert actual == expected
+
+    def test_update_cloudformation_if_there_is_not_connected_count(self):
+        self._create_table('TestTable', 'id')
+        self.dynamodb.put_item(
+            TableName='TestTable',
+            Item={'id': {'S': 'counter'}, 'count': {'S': 'not_number_data'}}
+        )
+        self._create_cfn_stack('TestStack', {'TestKey': 'TestValue'})
+        obj = MinecraftSwitcher('TestStack', 'TestTable', 'id')
+        expected = self._create_cfn_parameters({'TestKey': 'Overrode'})
+
+        obj.update_cloudformation_stack({'TestKey': 'Overrode'})
+        actual = obj.get_cloudformation_parameters()
+
+        assert actual == expected

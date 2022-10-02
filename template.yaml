@@ -206,7 +206,9 @@ Resources:
         Value: enabled
   MinecraftECSTask:
     Type: AWS::ECS::TaskDefinition
-    DependsOn: MinecraftBucket
+    DependsOn:
+    - MinecraftBucket
+    - MinecraftBackupBucket
     Properties:
       Family: minecraft
       Cpu: !Ref MinecraftContainerCpuSize
@@ -229,6 +231,8 @@ Resources:
         Environment:
         - Name: BUCKET_NAME
           Value: !Ref AWS::StackName
+        - Name: BACKUP_BUCKET_NAME
+          Value: !Sub backup.${AWS::StackName}
         - !If
           - IsUsedWhiteList
           - Name: MINECRAFT_WHITE_LIST
@@ -291,6 +295,10 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref AWS::StackName
+  MinecraftBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub backup.${AWS::StackName}
 
   ## NLBリソースを削除している際にもRoute53のHostedZoneでドメイン登録するために
   ## 用意しているダミーS3バケット

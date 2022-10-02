@@ -7,7 +7,9 @@ kill ${MINECRAFT_PID}
 wait ${MINECRAFT_PID}
 echo "Done minecraft-server."
 
-aws s3 sync world/ s3://${BUCKET_NAME}/backup/latest/world/
+tar cfa world.tar.gz world/ --warning=no-file-changed
+aws s3 cp world.tar.gz s3://${BACKUP_BUCKET_NAME}/minecraft-server/latest/world.tar.gz
+
 aws s3 sync crash-reports/ s3://${BUCKET_NAME}/backup/latest/crash-reports/
 
 # Wait to push log to CloudWatch Logs

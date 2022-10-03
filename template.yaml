@@ -206,7 +206,9 @@ Resources:
         Value: enabled
   MinecraftECSTask:
     Type: AWS::ECS::TaskDefinition
-    DependsOn: MinecraftBucket
+    DependsOn:
+    - MinecraftBucket
+    - MinecraftBackupBucket
     Properties:
       Family: minecraft
       Cpu: !Ref MinecraftContainerCpuSize
@@ -229,6 +231,8 @@ Resources:
         Environment:
         - Name: BUCKET_NAME
           Value: !Ref AWS::StackName
+        - Name: BACKUP_BUCKET_NAME
+          Value: !Sub backup.${AWS::StackName}
         - !If
           - IsUsedWhiteList
           - Name: MINECRAFT_WHITE_LIST
@@ -291,6 +295,28 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref AWS::StackName
+  MinecraftBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub backup.${AWS::StackName}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: VersioningSettingForLatestMinecraftServer
+          Status: Enabled
+          Prefix: minecraft-server/latest/
+          NoncurrentVersionTransitions:
+          - StorageClass: GLACIER
+            TransitionInDays: 7
+          NoncurrentVersionExpiration:
+            NoncurrentDays: 90
+            NewerNoncurrentVersions: 10
+        - Id: AbortIncompleteMultipartUploadForLatestMinecraftServer
+          Status: Enabled
+          Prefix: minecraft-server/latest/
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 3
 
   ## NLBリソースを削除している際にもRoute53のHostedZoneでドメイン登録するために
   ## 用意しているダミーS3バケット

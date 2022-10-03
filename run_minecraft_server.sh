@@ -1,6 +1,14 @@
 #!/bin/bash -e
 
-aws s3 sync s3://${BUCKET_NAME}/backup/latest/world/ world/
+# Check for zip file
+if [[ $(aws s3 ls s3://${BACKUP_BUCKET_NAME}/minecraft-server/latest/world.tar.gz | wc -c) -ne 0 ]]; then
+  echo "Restore from s3://${BACKUP_BUCKET_NAME}/minecraft-server/latest/world.tar.gz file."
+  aws s3 cp s3://${BACKUP_BUCKET_NAME}/minecraft-server/latest/world.tar.gz world.tar.gz
+  tar xf world.tar.gz
+else
+  echo "[Deprecated]: Restore from s3://${BUCKET_NAME}/backup/latest/world/ directory."
+  aws s3 sync s3://${BUCKET_NAME}/backup/latest/world/ world/
+fi
 
 # Change settings
 sed -i "s/max-tick-time=[0-9]*/max-tick-time=-1/g" server.properties

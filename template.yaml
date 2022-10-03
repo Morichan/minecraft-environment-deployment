@@ -299,6 +299,19 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub backup.${AWS::StackName}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: VersioningSettingForLatestMinecraftServer
+          Status: Enabled
+          Prefix: minecraft-server/latest/
+          NoncurrentVersionTransitions:
+          - StorageClass: GLACIER
+            TransitionInDays: 7
+          NoncurrentVersionExpiration:
+            NoncurrentDays: 90
+            NewerNoncurrentVersions: 10
 
   ## NLBリソースを削除している際にもRoute53のHostedZoneでドメイン登録するために
   ## 用意しているダミーS3バケット

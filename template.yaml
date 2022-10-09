@@ -232,6 +232,8 @@ Resources:
           Value: !Ref AWS::StackName
         - Name: BACKUP_BUCKET_NAME
           Value: !Sub backup.${AWS::StackName}
+        - Name: MINECRAFT_MEMORY
+          Value: !Ref MinecraftContainerMemorySoftLimit
         - Name: MINECRAFT_WHITE_LIST
           Value: !Ref MinecraftWhiteListString
         LogConfiguration:

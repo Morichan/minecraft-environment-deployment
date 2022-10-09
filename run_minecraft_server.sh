@@ -25,6 +25,6 @@ fi
 
 trap "./terminate_minecraft_server.sh" EXIT
 
-java -Xmx1024M -Xms1024M -jar server.jar nogui
+java -Xmx${MINECRAFT_MEMORY}M -Xms${MINECRAFT_MEMORY}M -jar server.jar nogui
 
 sleep infinity

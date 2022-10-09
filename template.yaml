@@ -74,7 +74,6 @@ Conditions:
   IsSetCustomDomain: !Not [ !Equals [ !Ref MinecraftDomain, 'null' ] ]
   IsSetCustomSubDomain: !Not [ !Equals [ !Ref MinecraftSubDomain, 'null' ] ]
   IsReusedHostedZone: !Not [ !Equals [ !Ref MinecraftHostedZoneId, 'null' ] ]
-  IsUsedWhiteList: !Not [ !Equals [ !Ref MinecraftWhiteListString, '' ] ]
 
 
 Resources:
@@ -233,11 +232,10 @@ Resources:
           Value: !Ref AWS::StackName
         - Name: BACKUP_BUCKET_NAME
           Value: !Sub backup.${AWS::StackName}
-        - !If
-          - IsUsedWhiteList
-          - Name: MINECRAFT_WHITE_LIST
-            Value: !Ref MinecraftWhiteListString
-          - !Ref AWS::NoValue
+        - Name: MINECRAFT_MEMORY
+          Value: !Ref MinecraftContainerMemorySoftLimit
+        - Name: MINECRAFT_WHITE_LIST
+          Value: !Ref MinecraftWhiteListString
         LogConfiguration:
           LogDriver: awslogs
           Options:

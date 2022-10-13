@@ -8,8 +8,8 @@ from moto import mock_cloudwatch, mock_dynamodb
 with mock_cloudwatch(), mock_dynamodb():
     from lib.clients_counter import (
         ClientsCounterByDynamoDB,
-        CounterTable,
         ClientsCounterByCloudWatch,
+        CounterTable,
         NotificationAnalysis,
     )
 
@@ -89,63 +89,6 @@ class TestClientsCounterByDynamoDB:
 
         with pytest.raises(RuntimeError):
             obj.count(message)
-
-
-@mock_dynamodb
-class TestCounterTable:
-    def test_add_counter(self):
-        _create_table('TestTable', 'id')
-        obj = CounterTable('TestTable', 'id')
-
-        actual = obj.update_item(1)
-
-        assert actual == 1
-
-    def test_add_counter_multiple(self):
-        _create_table('TestTable', 'id')
-        obj = CounterTable('TestTable', 'id')
-
-        obj.update_item(1)
-        obj.update_item(2)
-        actual = obj.update_item(3)
-
-        assert actual == 6
-
-    def test_subtract_counter(self):
-        _create_table('TestTable', 'id')
-        obj = CounterTable('TestTable', 'id')
-
-        actual = obj.update_item(-1)
-
-        assert actual == -1
-
-    def test_subtract_counter_multiple(self):
-        _create_table('TestTable', 'id')
-        obj = CounterTable('TestTable', 'id')
-
-        obj.update_item(3)
-        obj.update_item(-2)
-        actual = obj.update_item(-1)
-
-        assert actual == 0
-
-    @pytest.mark.asyncio
-    async def test_count_asyncronously(self):
-        import asyncio
-
-        with mock_dynamodb():
-            _create_table('TestTable', 'id')
-            obj = CounterTable('TestTable', 'id')
-            async def async_obj_update_item(count):
-                return await asyncio.get_event_loop().run_in_executor(None, obj.update_item, count)
-
-            actuals = await asyncio.gather(
-                async_obj_update_item(3),
-                async_obj_update_item(-2),
-                async_obj_update_item(4)
-            )
-
-            assert 5 in actuals
 
 
 @mock_cloudwatch
@@ -411,6 +354,63 @@ class TestClientsCounterByCloudWatch:
 
         with pytest.raises(RuntimeError):
             obj.create_log_data(message)
+
+
+@mock_dynamodb
+class TestCounterTable:
+    def test_add_counter(self):
+        _create_table('TestTable', 'id')
+        obj = CounterTable('TestTable', 'id')
+
+        actual = obj.update_item(1)
+
+        assert actual == 1
+
+    def test_add_counter_multiple(self):
+        _create_table('TestTable', 'id')
+        obj = CounterTable('TestTable', 'id')
+
+        obj.update_item(1)
+        obj.update_item(2)
+        actual = obj.update_item(3)
+
+        assert actual == 6
+
+    def test_subtract_counter(self):
+        _create_table('TestTable', 'id')
+        obj = CounterTable('TestTable', 'id')
+
+        actual = obj.update_item(-1)
+
+        assert actual == -1
+
+    def test_subtract_counter_multiple(self):
+        _create_table('TestTable', 'id')
+        obj = CounterTable('TestTable', 'id')
+
+        obj.update_item(3)
+        obj.update_item(-2)
+        actual = obj.update_item(-1)
+
+        assert actual == 0
+
+    @pytest.mark.asyncio
+    async def test_count_asyncronously(self):
+        import asyncio
+
+        with mock_dynamodb():
+            _create_table('TestTable', 'id')
+            obj = CounterTable('TestTable', 'id')
+            async def async_obj_update_item(count):
+                return await asyncio.get_event_loop().run_in_executor(None, obj.update_item, count)
+
+            actuals = await asyncio.gather(
+                async_obj_update_item(3),
+                async_obj_update_item(-2),
+                async_obj_update_item(4)
+            )
+
+            assert 5 in actuals
 
 
 class TestNotificationAnalysis:

@@ -45,30 +45,6 @@ class ClientsCounterByDynamoDB:
             raise AlarmNotFoundError()
 
 
-class CounterTable:
-    def __init__(self, table_name, primary_key_column_name):
-        self.table_name = table_name
-        self.primary_key_column_name = primary_key_column_name
-
-    def update_item(self, count):
-        result = dynamodb.update_item(
-            TableName=self.table_name,
-            ReturnValues='UPDATED_NEW',
-            Key={self.primary_key_column_name: {'S': 'counter'}},
-            UpdateExpression=f'ADD #count :count',
-            ExpressionAttributeNames={
-                f'#count': 'count',
-            },
-            ExpressionAttributeValues={
-                ':count': {
-                    'N': str(count),
-                },
-            }
-        )
-
-        return int(result['Attributes']['count']['N'])
-
-
 class ClientsCounterByCloudWatch:
     def __init__(self, joined_alarm_name, left_alarm_name, metric_namespace, metric_name):
         self.joined_alarm_name = joined_alarm_name
@@ -132,6 +108,30 @@ class ClientsCounterByCloudWatch:
             }
         else:
             raise AlarmNotFoundError()
+
+
+class CounterTable:
+    def __init__(self, table_name, primary_key_column_name):
+        self.table_name = table_name
+        self.primary_key_column_name = primary_key_column_name
+
+    def update_item(self, count):
+        result = dynamodb.update_item(
+            TableName=self.table_name,
+            ReturnValues='UPDATED_NEW',
+            Key={self.primary_key_column_name: {'S': 'counter'}},
+            UpdateExpression=f'ADD #count :count',
+            ExpressionAttributeNames={
+                f'#count': 'count',
+            },
+            ExpressionAttributeValues={
+                ':count': {
+                    'N': str(count),
+                },
+            }
+        )
+
+        return int(result['Attributes']['count']['N'])
 
 
 class NotificationAnalysis:

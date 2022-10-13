@@ -8,6 +8,7 @@ from moto import mock_cloudwatch, mock_dynamodb
 with mock_cloudwatch(), mock_dynamodb():
     from lib.clients_counter import (
         ClientsCounterByDynamoDB,
+        CounterTable,
         ClientsCounterByCloudWatch,
         NotificationAnalysis,
     )
@@ -89,9 +90,12 @@ class TestClientsCounterByDynamoDB:
         with pytest.raises(RuntimeError):
             obj.count(message)
 
+
+@mock_dynamodb
+class TestCounterTable:
     def test_add_counter(self):
         _create_table('TestTable', 'id')
-        obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
+        obj = CounterTable('TestTable', 'id')
 
         actual = obj.update_item(1)
 
@@ -99,7 +103,7 @@ class TestClientsCounterByDynamoDB:
 
     def test_add_counter_multiple(self):
         _create_table('TestTable', 'id')
-        obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
+        obj = CounterTable('TestTable', 'id')
 
         obj.update_item(1)
         obj.update_item(2)
@@ -109,7 +113,7 @@ class TestClientsCounterByDynamoDB:
 
     def test_subtract_counter(self):
         _create_table('TestTable', 'id')
-        obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
+        obj = CounterTable('TestTable', 'id')
 
         actual = obj.update_item(-1)
 
@@ -117,7 +121,7 @@ class TestClientsCounterByDynamoDB:
 
     def test_subtract_counter_multiple(self):
         _create_table('TestTable', 'id')
-        obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
+        obj = CounterTable('TestTable', 'id')
 
         obj.update_item(3)
         obj.update_item(-2)
@@ -131,7 +135,7 @@ class TestClientsCounterByDynamoDB:
 
         with mock_dynamodb():
             _create_table('TestTable', 'id')
-            obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
+            obj = CounterTable('TestTable', 'id')
             async def async_obj_update_item(count):
                 return await asyncio.get_event_loop().run_in_executor(None, obj.update_item, count)
 

@@ -16,18 +16,17 @@ dynamodb = boto3.client('dynamodb')
 
 class ClientsCounterByDynamoDB:
     def __init__(self, table_name, primary_key_column_name, joined_alarm_name, left_alarm_name):
-        self.table_name = table_name
-        self.primary_key_column_name = primary_key_column_name
         self.joined_alarm_name = joined_alarm_name
         self.left_alarm_name = left_alarm_name
         self.na = NotificationAnalysis()
+        self.table = CounterTable(table_name, primary_key_column_name)
 
     def count(self, event_message):
         message = json.loads(event_message)
         metric = int(self.na.extract_datapoint(message['NewStateReason']))
 
         if message['AlarmName'] == self.joined_alarm_name:
-            result_metric = self.update_item(metric)
+            result_metric = self.table.update_item(metric)
             logger.info(json.dumps({
                 'connected_count': result_metric,
                 'joined_count': metric,
@@ -35,7 +34,7 @@ class ClientsCounterByDynamoDB:
             }))
             return result_metric
         elif message['AlarmName'] == self.left_alarm_name:
-            result_metric = self.update_item(-metric)
+            result_metric = self.table.update_item(-metric)
             logger.info(json.dumps({
                 'connected_count': result_metric,
                 'joined_count': 0,
@@ -44,6 +43,12 @@ class ClientsCounterByDynamoDB:
             return result_metric
         else:
             raise AlarmNotFoundError()
+
+
+class CounterTable:
+    def __init__(self, table_name, primary_key_column_name):
+        self.table_name = table_name
+        self.primary_key_column_name = primary_key_column_name
 
     def update_item(self, count):
         result = dynamodb.update_item(

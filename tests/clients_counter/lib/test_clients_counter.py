@@ -47,20 +47,22 @@ def _create_cloudwatch_alarm_message(alarm_name, timestamp, value, namespace='te
     })
 
 
-@mock_dynamodb
-class TestClientsCounterByDynamoDB:
-    dynamodb = boto3.client('dynamodb')
+def _create_table(table_name, primary_key):
+    with mock_dynamodb():
+        dynamodb = boto3.client('dynamodb')
 
-    def _create_table(self, table_name, primary_key):
-        self.dynamodb.create_table(
+        dynamodb.create_table(
             TableName=table_name,
             AttributeDefinitions=[{'AttributeName': primary_key, 'AttributeType': 'S'}],
             KeySchema=[{'AttributeName': primary_key, 'KeyType': 'HASH'}],
             BillingMode='PAY_PER_REQUEST'
         )
 
+
+@mock_dynamodb
+class TestClientsCounterByDynamoDB:
     def test_count_if_user_is_joined(self):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         message = _create_cloudwatch_alarm_message('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
 
@@ -69,7 +71,7 @@ class TestClientsCounterByDynamoDB:
         assert actual == 1
 
     def test_count_if_user_is_left_when_one_is_already_joined(self):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         message = _create_cloudwatch_alarm_message('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
         obj.count(message)
@@ -80,7 +82,7 @@ class TestClientsCounterByDynamoDB:
         assert actual == 0
 
     def test_not_count_if_cloudwatch_alarm_name_is_not_found(self, mocker):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         message = _create_cloudwatch_alarm_message('unknown_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
 
@@ -88,7 +90,7 @@ class TestClientsCounterByDynamoDB:
             obj.count(message)
 
     def test_add_counter(self):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
 
         actual = obj.update_item(1)
@@ -96,7 +98,7 @@ class TestClientsCounterByDynamoDB:
         assert actual == 1
 
     def test_add_counter_multiple(self):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
 
         obj.update_item(1)
@@ -106,7 +108,7 @@ class TestClientsCounterByDynamoDB:
         assert actual == 6
 
     def test_subtract_counter(self):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
 
         actual = obj.update_item(-1)
@@ -114,7 +116,7 @@ class TestClientsCounterByDynamoDB:
         assert actual == -1
 
     def test_subtract_counter_multiple(self):
-        self._create_table('TestTable', 'id')
+        _create_table('TestTable', 'id')
         obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
 
         obj.update_item(3)
@@ -128,7 +130,7 @@ class TestClientsCounterByDynamoDB:
         import asyncio
 
         with mock_dynamodb():
-            self._create_table('TestTable', 'id')
+            _create_table('TestTable', 'id')
             obj = ClientsCounterByDynamoDB('TestTable', 'id', 'joined_alarm', 'left_alarm')
             async def async_obj_update_item(count):
                 return await asyncio.get_event_loop().run_in_executor(None, obj.update_item, count)

@@ -1,8 +1,10 @@
-import json
 from logging import getLogger, INFO
 import os
 
-from lib.clients_counter import ClientsCounterByDynamoDB
+from lib.clients_counter import (
+    ClientsCounter,
+    CountCommandFromCloudWatchAlarmToDynamoDB,
+)
 
 
 logger = getLogger(__name__)
@@ -15,11 +17,13 @@ left_alarm_name = os.getenv('LEFT_ALARM_NAME')
 
 
 def handler(event, context):
-    clients_counter = ClientsCounterByDynamoDB(
-        table_name,
-        primary_key_column_name,
-        joined_alarm_name,
-        left_alarm_name
+    clients_counter = ClientsCounter(
+        command_class=CountCommandFromCloudWatchAlarmToDynamoDB,
+        event=event,
+        table_name=table_name,
+        primary_key_column_name=primary_key_column_name,
+        joined_alarm_name=joined_alarm_name,
+        left_alarm_name=left_alarm_name
     )
 
-    clients_counter.count(event['Records'][0]['Sns']['Message'])
+    clients_counter.count()

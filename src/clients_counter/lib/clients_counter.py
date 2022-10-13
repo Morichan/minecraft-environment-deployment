@@ -14,15 +14,59 @@ cw = boto3.client('cloudwatch')
 dynamodb = boto3.client('dynamodb')
 
 
-class ClientsCounterByDynamoDB:
-    def __init__(self, table_name, primary_key_column_name, joined_alarm_name, left_alarm_name):
-        self.joined_alarm_name = joined_alarm_name
-        self.left_alarm_name = left_alarm_name
-        self.na = NotificationAnalysis()
-        self.table = CounterTable(table_name, primary_key_column_name)
+class ClientsCounter:
+    """接続ユーザー数をカウントする.
 
-    def count(self, event_message):
-        message = json.loads(event_message)
+    Attributes
+    ----------
+    command : CountCommand
+        接続ユーザー数カウント時に利用するコマンド。
+        設定時にはクラス名を直接セットする。
+
+    Examples
+    --------
+    >>> # clients_counter.command object is required implementation class of CountCommand
+    >>> clients_counter = ClientsCounter(
+    ...     command_class=CountCommandFromCloudWatchAlarmToDynamoDB,
+    ...     parameter='is_required_by_command_class'
+    ... )
+    >>> clients_counter.count()
+
+    """
+    def __init__(self, command_class=None, **kwargs):
+        self._kwargs = kwargs
+        self.command = command_class or CountCommand
+
+    @property
+    def command(self):
+        return self._command
+
+    @command.setter
+    def command(self, command_class):
+        self._command = command_class(**self._kwargs)
+
+    def count(self):
+        self.command.count()
+
+
+class CountCommand:
+    def __init__(self, **kwargs):
+        pass
+
+    def count(self):
+        raise NotImplementedError()
+
+
+class CountCommandFromCloudWatchAlarmToDynamoDB(CountCommand):
+    def __init__(self, **kwargs):
+        self.event = kwargs['event']
+        self.joined_alarm_name = kwargs.get('joined_alarm_name')
+        self.left_alarm_name = kwargs.get('left_alarm_name')
+        self.na = NotificationAnalysis()
+        self.table = CounterTable(kwargs.get('table_name'), kwargs.get('primary_key_column_name'))
+
+    def count(self):
+        message = json.loads(self.event['Records'][0]['Sns']['Message'])
         metric = int(self.na.extract_datapoint(message['NewStateReason']))
 
         if message['AlarmName'] == self.joined_alarm_name:
@@ -45,12 +89,13 @@ class ClientsCounterByDynamoDB:
             raise AlarmNotFoundError()
 
 
-class ClientsCounterByCloudWatch:
-    def __init__(self, joined_alarm_name, left_alarm_name, metric_namespace, metric_name):
-        self.joined_alarm_name = joined_alarm_name
-        self.left_alarm_name = left_alarm_name
-        self.metric_namespace = metric_namespace
-        self.metric_name = metric_name
+class CountCommandFromCloudWatchAlarmToCloudWatchLogs(CountCommand):
+    def __init__(self, **kwargs):
+        self.event = kwargs['event']
+        self.joined_alarm_name = kwargs.get('joined_alarm_name')
+        self.left_alarm_name = kwargs.get('left_alarm_name')
+        self.metric_namespace = kwargs.get('metric_namespace')
+        self.metric_name = kwargs.get('metric_name')
         self.na = NotificationAnalysis()
 
     def get_metric_data(self):  # pragma: no cover
@@ -87,8 +132,8 @@ class ClientsCounterByCloudWatch:
             logger.info(f'{self.metric_namespace}/{self.metric_name} metric is not found.')
             return 0.0
 
-    def create_log_data(self, event_message):
-        message = json.loads(event_message)
+    def count(self):
+        message = json.loads(self.event['Records'][0]['Sns']['Message'])
         previous_metric = int(self.get_previous_metric())
         metric = int(self.na.extract_datapoint(message['NewStateReason']))
 

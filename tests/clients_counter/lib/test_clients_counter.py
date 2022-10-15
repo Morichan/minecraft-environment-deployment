@@ -13,6 +13,7 @@ with mock_cloudwatch(), mock_dynamodb():
         CountCommandFromCloudWatchAlarmToCloudWatchLogs,
         CounterTable,
         NotificationAnalysis,
+        UnknownEventSource,
     )
 
 
@@ -72,7 +73,8 @@ def _create_table(table_name, primary_key):
 @mock_dynamodb
 class TestClientsCounter:
     def test_count_to_use_send_message_from_cloudwatch_alarm_to_dynamodb(self, mocker):
-        m = mocker.spy(CountCommandFromCloudWatchAlarmToDynamoDB, 'count')
+        m_check = mocker.spy(CountCommandFromCloudWatchAlarmToDynamoDB, 'check_event_source')
+        m_count = mocker.spy(CountCommandFromCloudWatchAlarmToDynamoDB, 'count')
         _create_table('TestTable', 'id')
         event = _create_cloudwatch_alarm_event('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
         obj = ClientsCounter(event=event, table_name='TestTable', primary_key_column_name='id', joined_alarm_name='joined_alarm', left_alarm_name='left_alarm')
@@ -80,17 +82,45 @@ class TestClientsCounter:
 
         obj.count()
 
-        m.assert_called_once()
+        m_check.assert_called_once()
+        m_count.assert_called_once()
+
+    def test_not_count_to_use_send_message_from_cloudwatch_alarm_to_dynamodb_if_checking_is_failed(self, mocker):
+        m_check = mocker.patch('lib.clients_counter.CountCommandFromCloudWatchAlarmToDynamoDB.check_event_source', return_value=False)
+        m_count = mocker.spy(CountCommandFromCloudWatchAlarmToDynamoDB, 'count')
+        _create_table('TestTable', 'id')
+        event = _create_cloudwatch_alarm_event('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
+        obj = ClientsCounter(event=event, table_name='TestTable', primary_key_column_name='id', joined_alarm_name='joined_alarm', left_alarm_name='left_alarm')
+        obj.command = CountCommandFromCloudWatchAlarmToDynamoDB
+
+        obj.count()
+
+        m_check.assert_called_once()
+        m_count.assert_not_called()
 
     def test_count_to_use_send_message_from_cloudwatch_alarm_to_cloudwatch_logs(self, mocker):
-        m = mocker.spy(CountCommandFromCloudWatchAlarmToCloudWatchLogs, 'count')
+        m_check = mocker.spy(CountCommandFromCloudWatchAlarmToCloudWatchLogs, 'check_event_source')
+        m_count = mocker.spy(CountCommandFromCloudWatchAlarmToCloudWatchLogs, 'count')
         event = _create_cloudwatch_alarm_event('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
         obj = ClientsCounter(event=event, joined_alarm_name='joined_alarm', left_alarm_name='left_alarm', metric_namespace='test_namespace', metric_name='test_metric_name')
         obj.command = CountCommandFromCloudWatchAlarmToCloudWatchLogs
 
         obj.count()
 
-        m.assert_called_once()
+        m_check.assert_called_once()
+        m_count.assert_called_once()
+
+    def test_not_count_to_use_send_message_from_cloudwatch_alarm_to_cloudwatch_logs_if_checking_is_failed(self, mocker):
+        m_check = mocker.patch('lib.clients_counter.CountCommandFromCloudWatchAlarmToCloudWatchLogs.check_event_source', return_value=False)
+        m_count = mocker.spy(CountCommandFromCloudWatchAlarmToCloudWatchLogs, 'count')
+        event = _create_cloudwatch_alarm_event('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
+        obj = ClientsCounter(event=event, joined_alarm_name='joined_alarm', left_alarm_name='left_alarm', metric_namespace='test_namespace', metric_name='test_metric_name')
+        obj.command = CountCommandFromCloudWatchAlarmToCloudWatchLogs
+
+        obj.count()
+
+        m_check.assert_called_once()
+        m_count.assert_not_called()
 
     def test_raise_error_if_command_is_set_count_command(self, mocker):
         obj = ClientsCounter(command_class=CountCommand)
@@ -140,6 +170,26 @@ class TestCountCommandFromCloudWatchAlarmToDynamoDB:
 
         with pytest.raises(RuntimeError):
             obj.count()
+
+    def test_ckeck_that_event_source_is_sns_message(self):
+        event = _create_cloudwatch_alarm_event('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
+        obj = CountCommandFromCloudWatchAlarmToDynamoDB(event=event)
+
+        actual = obj.check_event_source()
+
+        assert actual
+
+    def test_raise_error_if_ckeck_that_event_source_is_null(self):
+        obj = CountCommandFromCloudWatchAlarmToDynamoDB(event=None)
+
+        with pytest.raises(UnknownEventSource):
+            obj.check_event_source()
+
+    def test_raise_error_if_ckeck_that_event_source_is_not_sns_message(self):
+        obj = CountCommandFromCloudWatchAlarmToDynamoDB(event={})
+
+        with pytest.raises(UnknownEventSource):
+            obj.check_event_source()
 
 
 @mock_cloudwatch
@@ -405,6 +455,26 @@ class TestCountCommandFromCloudWatchAlarmToCloudWatchLogs:
 
         with pytest.raises(RuntimeError):
             obj.count()
+
+    def test_ckeck_that_event_source_is_sns_message(self):
+        event = _create_cloudwatch_alarm_event('joined_alarm', datetime(2022, 8, 1, 15, 31), 1.0)
+        obj = CountCommandFromCloudWatchAlarmToDynamoDB(event=event)
+
+        actual = obj.check_event_source()
+
+        assert actual
+
+    def test_raise_error_if_ckeck_that_event_source_is_null(self):
+        obj = CountCommandFromCloudWatchAlarmToCloudWatchLogs(event=None)
+
+        with pytest.raises(UnknownEventSource):
+            obj.check_event_source()
+
+    def test_raise_error_if_ckeck_that_event_source_is_not_sns_message(self):
+        obj = CountCommandFromCloudWatchAlarmToCloudWatchLogs(event={})
+
+        with pytest.raises(UnknownEventSource):
+            obj.check_event_source()
 
 
 @mock_dynamodb

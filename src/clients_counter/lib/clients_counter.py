@@ -46,7 +46,8 @@ class ClientsCounter:
         self._command = command_class(**self._kwargs)
 
     def count(self):
-        self.command.count()
+        if self.command.check_event_source():
+            self.command.count()
 
 
 class CountCommand:
@@ -54,6 +55,9 @@ class CountCommand:
         pass
 
     def count(self):
+        raise NotImplementedError()
+
+    def check_event_source(self):
         raise NotImplementedError()
 
 
@@ -87,6 +91,13 @@ class CountCommandFromCloudWatchAlarmToDynamoDB(CountCommand):
             return result_metric
         else:
             raise AlarmNotFoundError()
+
+    def check_event_source(self):
+        try:
+            return self.event['Records'][0]['Sns']['Message']
+        except (KeyError, TypeError):
+            raise UnknownEventSource()
+
 
 
 class CountCommandFromCloudWatchAlarmToCloudWatchLogs(CountCommand):
@@ -154,6 +165,12 @@ class CountCommandFromCloudWatchAlarmToCloudWatchLogs(CountCommand):
         else:
             raise AlarmNotFoundError()
 
+    def check_event_source(self):
+        try:
+            return self.event['Records'][0]['Sns']['Message']
+        except (KeyError, TypeError):
+            raise UnknownEventSource()
+
 
 class CounterTable:
     def __init__(self, table_name, primary_key_column_name):
@@ -198,4 +215,8 @@ class NotificationAnalysis:
 
 
 class AlarmNotFoundError(RuntimeError):
+    pass
+
+
+class UnknownEventSource(RuntimeError):
     pass

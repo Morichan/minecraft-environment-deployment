@@ -377,6 +377,7 @@ Resources:
           Resource:
           - !GetAtt MinecraftECSTaskExecRole.Arn
           - !GetAtt MinecraftECSTaskRole.Arn
+          - !GetAtt CloudWatchLogsSubscriptionFilterRole.Arn
         - Sid: NLBUpdate
           Effect: Allow
           Action:
@@ -402,6 +403,44 @@ Resources:
           - lambda:GetFunctionUrlConfig
           Resource:
           - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*
+        - Sid: CloudWatchLogsDescribeLogGroups
+          Effect: Allow
+          Action:
+          - logs:DescribeLogGroups
+          Resource: '*'
+        - Sid: CloudWatchLogsCreateSubscriptionFilter
+          Effect: Allow
+          Action:
+          - logs:CreateSubscriptionFilter
+          - logs:DeleteSubscriptionFilter
+          - logs:PutSubscriptionFilter
+          Resource:
+          - !GetAtt MinecraftECSLogGroup.Arn
+        - Sid: KinesisCreateStream
+          Effect: Allow
+          Action:
+          - kinesis:DescribeStreamSummary
+          - kinesis:CreateStream
+          - kinesis:DeleteStream
+          - kinesis:AddTagsToStream
+          - kinesis:RemoveTagsFromStream
+          Resource:
+          - !Sub arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/*
+        - Sid: LambdaCreateEvent
+          Effect: Allow
+          Action:
+          - lambda:GetEventSourceMapping
+          - lambda:CreateEventSourceMapping
+          - lambda:DeleteEventSourceMapping
+          # lambda:*EventSourceMappingアクションはリソースレベルのアクセス許可が未サポート
+          Resource: '*'
+        - Sid: LambdaAddPermission
+          Effect: Allow
+          Action:
+          - lambda:AddPermission
+          - lambda:RemovePermission
+          Resource:
+          - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*
   MinecraftSwitcherLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -414,6 +453,7 @@ Resources:
   # CloudWatch Logs Subscription Filter to count the number of connected some clients
   MinecraftECSConnectedCountSubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
+    Condition: IsCreatedNLB
     Properties:
       LogGroupName: !Ref MinecraftECSLogGroup
       FilterPattern: ' the game'
@@ -421,6 +461,7 @@ Resources:
       RoleArn: !GetAtt CloudWatchLogsSubscriptionFilterRole.Arn
   MinecraftECSLogKinesisDataStream:
     Type: AWS::Kinesis::Stream
+    Condition: IsCreatedNLB
     Properties:
       StreamModeDetails:
         StreamMode: ON_DEMAND
@@ -446,6 +487,7 @@ Resources:
           TableName: !Ref MinecraftConnectedCounterTable
   MinecraftECSConnectedSomeClientsCounterEventOfKinesisDataStream:
     Type: AWS::Lambda::Permission
+    Condition: IsCreatedNLB
     Properties:
       FunctionName: !Ref MinecraftECSConnectedSomeClientsCounter
       Action: lambda:InvokeFunction
@@ -453,6 +495,7 @@ Resources:
       SourceArn: !GetAtt MinecraftECSLogKinesisDataStream.Arn
   MinecraftECSConnectedSomeClientsCounterEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
+    Condition: IsCreatedNLB
     Properties:
       Enabled: true
       FunctionName: !Ref MinecraftECSConnectedSomeClientsCounter

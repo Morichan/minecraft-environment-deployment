@@ -1,5 +1,7 @@
+import base64
 import boto3
 from datetime import datetime, timedelta
+import gzip
 import json
 
 import pytest
@@ -9,12 +11,65 @@ with mock_cloudwatch(), mock_dynamodb():
     from lib.clients_counter import (
         ClientsCounter,
         CountCommand,
+        CountCommandFromCloudWatchLogsToDynamoDB,
         CountCommandFromCloudWatchAlarmToDynamoDB,
         CountCommandFromCloudWatchAlarmToCloudWatchLogs,
         CounterTable,
         NotificationAnalysis,
+        LogState,
         UnknownEventSource,
+        UnknownLogState,
     )
+
+
+def _create_cloudwatch_log_event(timestamp, data_states, user_name, is_first=False):
+    if is_first:
+        data = [{
+            'messageType': 'CONTROL_MESSAGE',
+            'owner': 'CloudwatchLogs',
+            'logGroup': '',
+            'logStream': '',
+            'subscriptionFilters': [],
+            'logEvents': [{
+                'id': '',
+                'timestamp': round(timestamp.timestamp(), 3) * 1000,
+                'message': 'CWL CONTROL MESSAGE: Checking health of destination Kinesis stream.'
+            }],
+        }]
+    else:
+        data = [{
+            'messageType': 'DATA_MESSAGE',
+            'owner': '000000000000',
+            'logGroup': '/ecs/logs/minecraft-environment-deployment/minecraft-server',
+            'logStream': 'minecraft/minecraft-server/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+            'subscriptionFilters': [
+                'minecraft-environment-deployment-MinecraftECSConnectedCountSubscriptionFilter-xxxxxxxxxxxx',
+            ],
+            'logEvents': [{
+                'id': '33333333333333333333333333333333333333333333333333333333',
+                'timestamp': round(timestamp.timestamp(), 3) * 1000,
+                'message': f'[{timestamp.strftime("%H:%M:%S")}] [Server thread/INFO]: {user_name} {log_event_state} the game',
+            } for log_event_state in data_state],
+        } for data_state in data_states]
+
+    return {
+        'Records': [{
+            'kinesis': {
+                'kinesisSchemaVersion': '1.0',
+                'partitionKey': '3e21f5e8240cbb048271af4fdb892a1c',
+                'sequenceNumber': '49634156167133626984422846403173197967042654711234691106',
+                'data': base64.b64encode(gzip.compress(json.dumps(d).encode())).decode(),
+                'approximateArrivalTimestamp': round(timestamp.timestamp(), 3),
+            },
+            'eventSource': 'aws:kinesis',
+            'eventVersion': '1.0',
+            'eventID': 'shardId-000000000002:49634156167133626984422846403173197967042654711234691106',
+            'eventName': 'aws:kinesis:record',
+            'invokeIdentityArn': 'arn:aws:iam::485332844223:role/minecraft-environment-dep-MinecraftECSConnectedSom-11P9E4LPBFG0O',
+            'awsRegion': 'ap-northeast-1',
+            'eventSourceARN': 'arn:aws:kinesis:ap-northeast-1:485332844223:stream/minecraft-environment-deployment-MinecraftECSLogKinesisDataStream-Ckgt1t0sQ1pd',
+        } for d in data],
+    }
 
 
 def _create_cloudwatch_alarm_event(alarm_name, timestamp, value, namespace='test_namespace', metric_name='test_metric_name'):
@@ -72,6 +127,32 @@ def _create_table(table_name, primary_key):
 @mock_cloudwatch
 @mock_dynamodb
 class TestClientsCounter:
+    def test_count_to_use_send_message_from_cloudwatch_logs_to_dynamodb(self, mocker):
+        m_check = mocker.spy(CountCommandFromCloudWatchLogsToDynamoDB, 'check_event_source')
+        m_count = mocker.spy(CountCommandFromCloudWatchLogsToDynamoDB, 'count')
+        _create_table('TestTable', 'id')
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined']], 'user')
+        obj = ClientsCounter(event=event, table_name='TestTable', primary_key_column_name='id')
+        obj.command = CountCommandFromCloudWatchLogsToDynamoDB
+
+        obj.count()
+
+        m_check.assert_called_once()
+        m_count.assert_called_once()
+
+    def test_not_count_to_use_send_message_from_cloudwatch_logs_to_dynamodb_if_checking_is_failed(self, mocker):
+        m_check = mocker.patch('lib.clients_counter.CountCommandFromCloudWatchLogsToDynamoDB.check_event_source', return_value=False)
+        m_count = mocker.spy(CountCommandFromCloudWatchLogsToDynamoDB, 'count')
+        _create_table('TestTable', 'id')
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined']], 'user')
+        obj = ClientsCounter(event=event, table_name='TestTable', primary_key_column_name='id')
+        obj.command = CountCommandFromCloudWatchLogsToDynamoDB
+
+        obj.count()
+
+        m_check.assert_called_once()
+        m_count.assert_not_called()
+
     def test_count_to_use_send_message_from_cloudwatch_alarm_to_dynamodb(self, mocker):
         m_check = mocker.spy(CountCommandFromCloudWatchAlarmToDynamoDB, 'check_event_source')
         m_count = mocker.spy(CountCommandFromCloudWatchAlarmToDynamoDB, 'count')
@@ -137,6 +218,130 @@ class TestCountCommand:
             obj.count()
 
         with pytest.raises(NotImplementedError):
+            obj.check_event_source()
+
+
+@mock_dynamodb
+class TestCountCommandFromCloudWatchLogsToDynamoDB:
+    def test_count_if_user_is_joined(self):
+        _create_table('TestTable', 'id')
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.count()
+
+        assert actual == [1]
+
+    def test_count_if_users_are_joined_and_left(self):
+        _create_table('TestTable', 'id')
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined', 'joined', 'left'], ['left', 'joined'], ['joined'], ['left', 'left']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.count()
+
+        assert actual == [1, 2, 1, 0, 1, 2, 1, 0]
+
+    def test_check_event_source_is_kinesis_data_stream(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.check_event_source()
+
+        assert actual
+
+    def test_raise_error_if_event_source_is_unknown(self):
+        event = {'Records': [{'UnknownEventSource': {}}]}
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        with pytest.raises(UnknownEventSource):
+            obj.check_event_source()
+
+    def test_decode_data_in_event_records(self):
+        expected = {
+            'Records': [
+                {'kinesis': {'data': {'logEvents': [{'id': '1'}]}}},
+                {'kinesis': {'data': {'logEvents': [{'id': '2'}]}}},
+            ],
+        }
+        event = {
+            'Records': [
+                {'kinesis': {'data': 'H4sIAPDvRmMC/6tWyslPdy1LzSspVrJSiK5WykwB0kqGSrWxtQC0KFpkHAAAAA=='}},
+                {'kinesis': {'data': 'H4sIAPjvRmMC/6tWyslPdy1LzSspVrJSiK5WykwB0kpGSrWxtQBkUvojHAAAAA=='}},
+                # {'kinesis': {'data': base64.b64encode(gzip.compress(json.dumps({'logEvents': [{'id': '1'}]}).encode())).decode()}},
+                # {'kinesis': {'data': base64.b64encode(gzip.compress(json.dumps({'logEvents': [{'id': '2'}]}).encode())).decode()}},
+            ],
+        }
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.decode_event_records()
+
+        assert actual == expected
+
+    def test_analyze_log_text_to_verify_that_user_is_joined(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.analyze_log_text()
+
+        assert actual == [[LogState.JOINED]]
+
+    def test_analyze_log_text_to_verify_that_user_is_left(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['left']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.analyze_log_text()
+
+        assert actual == [[LogState.LEFT]]
+
+    def test_raise_error_if_log_text_is_unknown(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['unknown']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        with pytest.raises(UnknownLogState):
+            obj.analyze_log_text()
+
+    def test_analyze_log_text_if_log_event_has_multi_log_events_and_multi_data(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), [['joined', 'joined', 'left'], ['left', 'joined'], ['joined'], ['left', 'left']], 'user')
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.analyze_log_text()
+
+        assert actual == [[LogState.JOINED, LogState.JOINED, LogState.LEFT], [LogState.LEFT, LogState.JOINED], [LogState.JOINED], [LogState.LEFT, LogState.LEFT]]
+
+    def test_analyze_log_text_to_verify_that_kinesis_resource_is_created(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), None, None, is_first=True)
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.analyze_log_text()
+
+        assert actual == [[LogState.INITIAL_ACTIVATION_OF_KINESIS_DATA_STREAM]]
+
+    def test_result_is_empty_if_kinesis_resource_is_created(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), None, None, is_first=True)
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event, table_name='TestTable', primary_key_column_name='id')
+
+        actual = obj.count()
+
+        assert actual == []
+
+    def test_ckeck_that_event_source_is_kinesis_data_stream(self):
+        event = _create_cloudwatch_log_event(datetime(2022, 8, 1, 15, 31), None, None, is_first=True)
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=event)
+
+        actual = obj.check_event_source()
+
+        assert actual
+
+    def test_raise_error_if_ckeck_that_event_source_is_null(self):
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event=None)
+
+        with pytest.raises(UnknownEventSource):
+            obj.check_event_source()
+
+    def test_raise_error_if_ckeck_that_event_source_is_not_kinesis_data_stream(self):
+        obj = CountCommandFromCloudWatchLogsToDynamoDB(event={})
+
+        with pytest.raises(UnknownEventSource):
             obj.check_event_source()
 
 

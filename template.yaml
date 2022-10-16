@@ -411,78 +411,19 @@ Resources:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
 
-  # CloudWatch Metrics for connected some clients count
-  MinecraftECSJoinedCountMetricFilter:
-    Type: AWS::Logs::MetricFilter
+  # CloudWatch Logs Subscription Filter to count the number of connected some clients
+  MinecraftECSConnectedCountSubscriptionFilter:
+    Type: AWS::Logs::SubscriptionFilter
     Properties:
-      FilterPattern: ' joined the game'
       LogGroupName: !Ref MinecraftECSLogGroup
-      MetricTransformations:
-      - MetricNamespace: MinecraftECSTask
-        MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-joined-count
-        MetricValue: '1'
-  MinecraftECSLeftCountMetricFilter:
-    Type: AWS::Logs::MetricFilter
+      FilterPattern: ' the game'
+      DestinationArn: !GetAtt MinecraftECSLogKinesisDataStream.Arn
+      RoleArn: !GetAtt CloudWatchLogsSubscriptionFilterRole.Arn
+  MinecraftECSLogKinesisDataStream:
+    Type: AWS::Kinesis::Stream
     Properties:
-      FilterPattern: ' left the game'
-      LogGroupName: !Ref MinecraftECSLogGroup
-      MetricTransformations:
-      - MetricNamespace: MinecraftECSTask
-        MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-left-count
-        MetricValue: '1'
-  MinecraftECSJoinedSomeClientsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-joined-some-clients
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Threshold: 1
-      DatapointsToAlarm: 1
-      EvaluationPeriods: 1
-      TreatMissingData: notBreaching
-      Metrics:
-      - Id: result
-        Label: minecraft_joined_count_or_zero
-        Expression: FILL(m1, 0)
-        ReturnData: true
-      - Id: m1
-        Label: minecraft_joined_count
-        MetricStat:
-          Metric:
-            Namespace: MinecraftECSTask
-            MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-joined-count
-          Period: 60
-          Stat: Sum
-        ReturnData: false
-      AlarmActions:
-      - !Ref MinecraftECSConnectedSomeClientsSNSTopic
-  MinecraftECSLeftSomeClientsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub ${AWS::StackName}-minecraft-ecs-left-some-clients
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Threshold: 1
-      DatapointsToAlarm: 1
-      EvaluationPeriods: 1
-      TreatMissingData: notBreaching
-      Metrics:
-      - Id: result
-        Label: minecraft_left_count_or_zero
-        Expression: FILL(m2, 0)
-        ReturnData: true
-      - Id: m2
-        Label: minecraft_left_count
-        MetricStat:
-          Metric:
-            Namespace: MinecraftECSTask
-            MetricName: !Sub ${MinecraftECSLogGroup}/minecraft-left-count
-          Period: 60
-          Stat: Sum
-        ReturnData: false
-      AlarmActions:
-      - !Ref MinecraftECSConnectedSomeClientsSNSTopic
-  MinecraftECSConnectedSomeClientsSNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName
@@ -498,15 +439,13 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref MinecraftConnectedCounterTable
-          JOINED_ALARM_NAME: !Ref MinecraftECSJoinedSomeClientsAlarm
-          LEFT_ALARM_NAME: !Ref MinecraftECSLeftSomeClientsAlarm
       Events:
-        SnsAlarmTopic:
-          Type: SNS
+        ECSLogsKinesisDataStream:
+          Type: Kinesis
           Properties:
-            Topic: !Ref MinecraftECSConnectedSomeClientsSNSTopic
+            Stream: !GetAtt MinecraftECSLogKinesisDataStream.Arn
+            StartingPosition: TRIM_HORIZON
       Policies:
-      - CloudWatchReadOnlyAccess
       - DynamoDBCrudPolicy:
           TableName: !Ref MinecraftConnectedCounterTable
   MinecraftECSConnectedSomeClientsCounterLogGroup:
@@ -523,6 +462,8 @@ Resources:
       Tags:
         # Key is not used Fn::Ref: ResourceTagKey
         minecraft:cloudformation:stack-name: !Ref AWS::StackName
+
+  # CloudWatch Logs Metric Filter for alarm when the number of connected some clients reaches 0
   MinecraftECSConnectedCountMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -602,6 +543,30 @@ Resources:
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/AmazonS3FullAccess
       - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+      - Key: !Ref ResourceTagKey
+        Value: !Ref AWS::StackName
+  CloudWatchLogsSubscriptionFilterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - !Sub logs.${AWS::Region}.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: !Sub ${AWS::StackName}-PutRecordToKinesisDataStream
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - kinesis:PutRecord
+            Resource: '*'
       Tags:
       - Key: !Ref ResourceTagKey
         Value: !Ref AWS::StackName

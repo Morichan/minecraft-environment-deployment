@@ -1,4 +1,8 @@
+import base64
 from datetime import datetime, timedelta
+from enum import Enum, auto
+import gzip
+import itertools
 import json
 from logging import getLogger, INFO
 import re
@@ -59,6 +63,73 @@ class CountCommand:
 
     def check_event_source(self):
         raise NotImplementedError()
+
+
+class CountCommandFromCloudWatchLogsToDynamoDB:
+    def __init__(self, **kwargs):
+        self.event = kwargs['event']
+        self.table = CounterTable(kwargs.get('table_name'), kwargs.get('primary_key_column_name'))
+
+    def count(self):
+        results = []
+
+        for state in itertools.chain.from_iterable(self.analyze_log_text()):
+            if state == LogState.JOINED:
+                result = self.table.update_item(1)
+                logger.info(json.dumps({
+                    'connected_count': result,
+                    'joined_count': 1,
+                    'left_count': 0,
+                }))
+                results.append(result)
+            elif state == LogState.LEFT:
+                result = self.table.update_item(-1)
+                logger.info(json.dumps({
+                    'connected_count': result,
+                    'joined_count': 0,
+                    'left_count': 1,
+                }))
+                results.append(result)
+
+        return results
+
+    def analyze_log_text(self):
+        decoded = self.decode_event_records()
+        logger.info(json.dumps(decoded))
+
+        results_list = []
+        for record in decoded['Records']:
+            results = []
+            for log_event in record['kinesis']['data']['logEvents']:
+                if 'joined' in log_event['message']:
+                    results.append(LogState.JOINED)
+                elif 'left' in log_event['message']:
+                    results.append(LogState.LEFT)
+                elif log_event['message'].startswith('CWL CONTROL MESSAGE'):
+                    logger.info(log_event['message'])
+                    results.append(LogState.INITIAL_ACTIVATION_OF_KINESIS_DATA_STREAM)
+                else:
+                    raise UnknownLogState
+            results_list.append(results)
+
+        return results_list
+
+    def decode_event_records(self):
+        decoded = self.event | {
+            'Records': [
+                r | {
+                    'kinesis': {'data': json.loads(gzip.decompress(base64.b64decode(r['kinesis']['data'].encode())))}
+                } for r in self.event['Records']
+            ]
+        }
+
+        return decoded
+
+    def check_event_source(self):
+        try:
+            return len(self.event['Records']) >= 1 and self.event['Records'][0]['kinesis']
+        except (KeyError, TypeError):
+            raise UnknownEventSource()
 
 
 class CountCommandFromCloudWatchAlarmToDynamoDB(CountCommand):
@@ -214,9 +285,19 @@ class NotificationAnalysis:
         return float(re.findall(r'\[([0-9.-]*)\s*\([^)]*\)\]', notification_log_from_sns)[0])
 
 
+class LogState(Enum):
+    JOINED = auto()
+    LEFT = auto()
+    INITIAL_ACTIVATION_OF_KINESIS_DATA_STREAM = auto()
+
+
 class AlarmNotFoundError(RuntimeError):
     pass
 
 
 class UnknownEventSource(RuntimeError):
+    pass
+
+
+class UnknownLogState(RuntimeError):
     pass

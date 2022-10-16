@@ -439,15 +439,25 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref MinecraftConnectedCounterTable
-      Events:
-        ECSLogsKinesisDataStream:
-          Type: Kinesis
-          Properties:
-            Stream: !GetAtt MinecraftECSLogKinesisDataStream.Arn
-            StartingPosition: TRIM_HORIZON
       Policies:
+      - KinesisStreamReadPolicy:
+          StreamName: '*'
       - DynamoDBCrudPolicy:
           TableName: !Ref MinecraftConnectedCounterTable
+  MinecraftECSConnectedSomeClientsCounterEventOfKinesisDataStream:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MinecraftECSConnectedSomeClientsCounter
+      Action: lambda:InvokeFunction
+      Principal: kinesis.amazonaws.com
+      SourceArn: !GetAtt MinecraftECSLogKinesisDataStream.Arn
+  MinecraftECSConnectedSomeClientsCounterEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: true
+      FunctionName: !Ref MinecraftECSConnectedSomeClientsCounter
+      EventSourceArn: !GetAtt MinecraftECSLogKinesisDataStream.Arn
+      StartingPosition: TRIM_HORIZON
   MinecraftECSConnectedSomeClientsCounterLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

@@ -407,6 +407,7 @@ Resources:
           Effect: Allow
           Action:
           - logs:DescribeLogGroups
+          - logs:DescribeSubscriptionFilters
           Resource: '*'
         - Sid: CloudWatchLogsCreateSubscriptionFilter
           Effect: Allow
